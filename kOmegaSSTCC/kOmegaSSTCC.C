@@ -25,7 +25,7 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "kOmegaSST.H"
+#include "kOmegaSSTCC.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -37,7 +37,7 @@ namespace RASModels
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
 template<class BasicTurbulenceModel>
-void kOmegaSST<BasicTurbulenceModel>::correctNut(const volScalarField& S2)
+void kOmegaSSTCC<BasicTurbulenceModel>::correctNut(const volScalarField& S2)
 {
     // Correct the turbulence viscosity
     kOmegaSSTBase<eddyViscosity<RASModel<BasicTurbulenceModel>>>::correctNut
@@ -51,7 +51,7 @@ void kOmegaSST<BasicTurbulenceModel>::correctNut(const volScalarField& S2)
 
 
 template<class BasicTurbulenceModel>
-void kOmegaSST<BasicTurbulenceModel>::correctNut()
+void kOmegaSSTCC<BasicTurbulenceModel>::correctNut()
 {
     correctNut(2*magSqr(symm(fvc::grad(this->U_))));
 }
@@ -60,7 +60,7 @@ void kOmegaSST<BasicTurbulenceModel>::correctNut()
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 template<class BasicTurbulenceModel>
-kOmegaSST<BasicTurbulenceModel>::kOmegaSST
+kOmegaSSTCC<BasicTurbulenceModel>::kOmegaSSTCC
 (
     const alphaField& alpha,
     const rhoField& rho,

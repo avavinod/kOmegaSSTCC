@@ -25,7 +25,7 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::RASModels::kOmegaSST
+    Foam::RASModels::kOmegaSSTCC
 
 Group
     grpRASTurbulence
@@ -82,7 +82,7 @@ Description
 
     The default model coefficients are
     \verbatim
-        kOmegaSSTCoeffs
+        kOmegaSSTCCCoeffs
         {
             alphaK1     0.85;
             alphaK2     1.0;
@@ -101,15 +101,15 @@ Description
     \endverbatim
 
 SourceFiles
-    kOmegaSST.C
+    kOmegaSSTCC.C
 
 SeeAlso
     kOmegaSSTBase.H
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef kOmegaSST_H
-#define kOmegaSST_H
+#ifndef kOmegaSSTCC_H
+#define kOmegaSSTCC_H
 
 #include "kOmegaSSTBase.H"
 #include "RASModel.H"
@@ -123,21 +123,21 @@ namespace RASModels
 {
 
 /*---------------------------------------------------------------------------*\
-                          Class kOmegaSST Declaration
+                          Class kOmegaSSTCC Declaration
 \*---------------------------------------------------------------------------*/
 
 template<class BasicTurbulenceModel>
-class kOmegaSST
+class kOmegaSSTCC
 :
     public kOmegaSSTBase<eddyViscosity<RASModel<BasicTurbulenceModel>>>
 {
     // Private Member Functions
 
         //- No copy construct
-        kOmegaSST(const kOmegaSST&) = delete;
+        kOmegaSSTCC(const kOmegaSSTCC&) = delete;
 
         //- No copy assignment
-        void operator=(const kOmegaSST&) = delete;
+        void operator=(const kOmegaSSTCC&) = delete;
 
 
 protected:
@@ -156,13 +156,13 @@ public:
 
 
     //- Runtime type information
-    TypeName("kOmegaSST");
+    TypeName("kOmegaSSTCC");
 
 
     // Constructors
 
         //- Construct from components
-        kOmegaSST
+        kOmegaSSTCC
         (
             const alphaField& alpha,
             const rhoField& rho,
@@ -176,7 +176,7 @@ public:
 
 
     //- Destructor
-    virtual ~kOmegaSST() = default;
+    virtual ~kOmegaSSTCC() = default;
 };
 
 
@@ -187,7 +187,7 @@ public:
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 #ifdef NoRepository
-    #include "kOmegaSST.C"
+    #include "kOmegaSSTCC.C"
 #endif
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
