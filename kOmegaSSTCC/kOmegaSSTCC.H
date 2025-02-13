@@ -104,14 +104,14 @@ SourceFiles
     kOmegaSSTCC.C
 
 SeeAlso
-    kOmegaSSTBase.H
+    kOmegaSST.H
 
 \*---------------------------------------------------------------------------*/
 
 #ifndef kOmegaSSTCC_H
 #define kOmegaSSTCC_H
 
-#include "kOmegaSSTBase.H"
+#include "kOmegaSST.H"
 #include "RASModel.H"
 #include "eddyViscosity.H"
 
@@ -129,7 +129,7 @@ namespace RASModels
 template<class BasicTurbulenceModel>
 class kOmegaSSTCC
 :
-    public kOmegaSSTBase<eddyViscosity<RASModel<BasicTurbulenceModel>>>
+    public kOmegaSST<eddyViscosity<RASModel<BasicTurbulenceModel>>>
 {
     // Private Member Functions
 
@@ -145,6 +145,7 @@ protected:
     // Protected Member Functions
 
         virtual void correctNut(const volScalarField& S2);
+        virtual
         virtual void correctNut();
 
 
