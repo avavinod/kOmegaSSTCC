@@ -26,7 +26,9 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "kOmegaSSTCC.H"
-
+#include "fvOptions.H"
+#include "bound.H"
+#include <typeinfo>
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
@@ -36,25 +38,182 @@ namespace RASModels
 
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
+// template<class BasicTurbulenceModel>
+// tmp<volTensorField> kOmegaSSTCC<BasicTurbulenceModel>::symmGradU
+// (
+//     const volTensorField& gradU
+// ) const
+// {
+//     return symm(gradU);
+// }
+
 template<class BasicTurbulenceModel>
-void kOmegaSSTCC<BasicTurbulenceModel>::correctNut(const volScalarField& S2)
+tmp<volVectorField> kOmegaSSTCC<BasicTurbulenceModel>::rotRateMesh() const
 {
-    // Correct the turbulence viscosity
-    kOmegaSST<eddyViscosity<RASModel<BasicTurbulenceModel>>>::correctNut
+    volVectorField rotRate
     (
-        S2
+        IOobject
+        (
+            "rotRate",
+            this->runTime_.timeName(),
+            this->mesh_,
+            IOobject::NO_READ,
+            IOobject::NO_WRITE
+        ),
+        this->mesh_,
+        dimensionedVector( "dummy", dimensionSet(0,0,-1,0,0,0,0), vector::zero)
+    );
+    IOMRFZoneList MRF_(this->mesh_);
+
+    for (label j = 0; j < MRF_.UPtrList<MRFZone>::size(); ++j)
+    {
+        const MRFZone& mrf = MRF_.UPtrList<MRFZone>::operator[](j);
+        const label& cellZoneID_ = this->mesh_.cellZones().findZoneID(mrf.name());
+        if (cellZoneID_ == -1)
+        {
+            continue;
+        }
+        const labelList& cells = this->mesh_.cellZones()[cellZoneID_];
+        const vector Omega = mrf.Omega();
+        forAll(cells, i)
+        {
+            label celli = cells[i];
+            rotRate[celli] += Omega ;
+        }
+    }
+    return rotRate;
+}
+
+// template<class BasicTurbulenceModel>
+// tmp<volTensorField> kOmegaSSTCC<BasicTurbulenceModel>::hodgeDualrotRateMesh
+// (
+//     const volVectorField& rotRate
+// ) const
+// {
+//     return rotRateMesh;
+// }
+
+// template<class BasicTurbulenceModel>
+// tmp<volTensorField> kOmegaSSTCC<BasicTurbulenceModel>::Omega
+// (
+//     const volTensorField& gradU,
+//     const volTensorField& hodgeDualrotRateMesh
+// ) const
+// {
+//     return skew(gradU) + hodgeDualrotRateMesh;
+// }
+
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::S2
+// (
+//     const volTensorField& symmGradU
+// ) const
+// {
+//     return 2*magSqr(symmGradU);
+// }
+
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::Omega2
+// (
+//     const volTensorField& Omega
+// ) const
+// {
+//     return 2*magSqr(Omega);
+// }
+
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::sqrtS2
+// (
+//     const volScalarField& S2
+// ) const
+// {
+//     return sqrt(S2);
+// }
+
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::sqrtOmega2
+// (
+//     const volScalarField& Omega2
+// ) const
+// {
+//     return sqrt(Omega2);
+// }
+//////////////////////////////////////////////
+template<class BasicTurbulenceModel>
+tmp<volScalarField::Internal> kOmegaSSTCC<BasicTurbulenceModel>::onebyOmegaD3
+(
+    const volScalarField& S2,
+    const volScalarField& sqrtOmega2
+) const
+{
+    const volScalarField::Internal& omega_ = this->omega_();
+    tmp<volScalarField::Internal>  D2(max(S2, 0.09*2.0*omega_*omega_));
+    return scalar(1.0)/(sqrtOmega2 * D2 * sqrt(D2));
+}
+
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::rStarByOnePlusrStar
+// (
+//     const volScalarField& sqrtS2,
+//     const volScalarField& sqrtOmega2
+// ) const
+// {
+//     return sqrtS2/ (sqrtS2 + sqrtOmega2);
+// }
+
+////////////////////////////////////////////
+template<class BasicTurbulenceModel>
+tmp<volScalarField::Internal> kOmegaSSTCC<BasicTurbulenceModel>::rTilda
+(
+    const volTensorField& symmGradU,
+    const volTensorField& Omega,
+    const volTensorField& hodgeDualrotRateMesh,
+    const volScalarField::Internal& onebyOmegaD3
+) const
+{
+    tmp<volScalarField> twoOmegaS = 2 * (Omega & symmGradU);
+    tmp<volTensorField::Internal> DDtS
+    (
+        fvc::DDt(this->phi(), symmGradU)
+    );
+    tmp<volTensorField> leviCivitaSRotRate
+    (
+        hodgeDualrotRateMesh & symmGradU
     );
 
-    // Correct the turbulence thermal diffusivity
-    BasicTurbulenceModel::correctNut();
+    return (twoOmegaS.internalField() && (DDtS + (leviCivitaSRotRate.internalField() & T(leviCivitaSRotRate.internalField())))) * onebyOmegaD3;
 }
 
+////////////////////////////////////////////
+// - Return square of strain rate
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::fRotation
+// (
+//     const volScalarField& rStarByOnePlusrStar,
+//     const volScalarField& rTilda
+// ) const
+// {
+//     return (1+cr1_)*2*rStarByOnePlusrStar*(1-cr3_*tanh(cr2_*rTilda)) - cr1_;
+// }
 
-template<class BasicTurbulenceModel>
-void kOmegaSSTCC<BasicTurbulenceModel>::correctNut()
-{
-    correctNut(2*magSqr(symm(fvc::grad(this->U_))));
-}
+// //- Return square of strain rate
+// template<class BasicTurbulenceModel>
+// tmp<volScalarField> kOmegaSSTCC<BasicTurbulenceModel>::fr1
+// (
+//     const volScalarField& fRotation
+// ) const
+// {
+//     return max(min(fRotation,1.25),0);
+// }
+
+
+
+
+// template<class BasicTurbulenceModel>
+// void kOmegaSSTCC<BasicTurbulenceModel>::correctNut()
+// {
+//     correctNut(2*magSqr(symm(fvc::grad(this->U_))));
+// }
 
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
@@ -112,6 +271,12 @@ kOmegaSSTCC<BasicTurbulenceModel>::kOmegaSSTCC
             1
         )
     )
+{
+    if (type == typeName)
+    {
+        this->printCoeffs(type);
+    }
+}
     // deltaU_("deltaU", dimVelocity, SMALL),
 
     // ReThetat_
@@ -153,12 +318,7 @@ kOmegaSSTCC<BasicTurbulenceModel>::kOmegaSSTCC
     //     this->mesh_,
     //     dimensionedScalar(dimless, Zero)
     // )
-{
-    if (type == typeName)
-    {
-        this->printCoeffs(type);
-    }
-}
+
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
@@ -184,118 +344,249 @@ bool kOmegaSSTCC<BasicTurbulenceModel>::read()
 }
 
 
-template<class BasicTurbulenceModel>
-void kOmegaSSTCC<BasicTurbulenceModel>::correctProductionTerm()
-{
-    // Local references
-    const alphaField& alpha = this->alpha_;
-    const rhoField& rho = this->rho_;
-    const surfaceScalarField& alphaRhoPhi = this->alphaRhoPhi_;
-    const volVectorField& U = this->U_;
-    const volScalarField& k = this->k_;
-    const volScalarField& omega = this->omega_;
-    const tmp<volScalarField> tnu = this->nu();
-    const volScalarField::Internal& nu = tnu()();
-    const volScalarField::Internal& y = this->y_();
-    fv::options& fvOptions(fv::options::New(this->mesh_));
+// template<class BasicTurbulenceModel>
+// void kOmegaSSTCC<BasicTurbulenceModel>::correctProductionTerm()
+// {
+//     // Local references
+//     const alphaField& alpha = this->alpha_;
+//     const rhoField& rho = this->rho_;
+//     const surfaceScalarField& alphaRhoPhi = this->alphaRhoPhi_;
+//     const volVectorField& U = this->U_;
+//     const volScalarField& k = this->k_;
+//     const volScalarField& omega = this->omega_;
+//     const tmp<volScalarField> tnu = this->nu();
+//     const volScalarField::Internal& nu = tnu()();
+//     const volScalarField::Internal& y = this->y_();
+//     fv::options& fvOptions(fv::options::New(this->mesh_));
 
-    // Fields derived from the velocity gradient
-    tmp<volTensorField> tgradU = fvc::grad(U);
-    const volScalarField::Internal Omega(sqrt(2*magSqr(skew(tgradU()()))));
-    const volScalarField::Internal S(sqrt(2*magSqr(symm(tgradU()()))));
-    const volScalarField::Internal Us(max(mag(U()), deltaU_));
-    const volScalarField::Internal dUsds((U() & (U() & tgradU()()))/sqr(Us));
-    tgradU.clear();
+//     // Fields derived from the velocity gradient
+//     tmp<volTensorField> tgradU = fvc::grad(U);
+//     const volScalarField::Internal Omega(sqrt(2*magSqr(skew(tgradU()()))));
+//     const volScalarField::Internal S(sqrt(2*magSqr(symm(tgradU()()))));
+//     const volScalarField::Internal Us(max(mag(U()), deltaU_));
+//     const volScalarField::Internal dUsds((U() & (U() & tgradU()()))/sqr(Us));
+//     tgradU.clear();
 
-    const volScalarField::Internal Fthetat(this->Fthetat(Us, Omega, nu));
+//     const volScalarField::Internal Fthetat(this->Fthetat(Us, Omega, nu));
 
-    {
-        const volScalarField::Internal t(500*nu/sqr(Us));
-        const volScalarField::Internal Pthetat
-        (
-            alpha()*rho()*(cThetat_/t)*(1 - Fthetat)
-        );
+//     {
+//         const volScalarField::Internal t(500*nu/sqr(Us));
+//         const volScalarField::Internal Pthetat
+//         (
+//             alpha()*rho()*(cThetat_/t)*(1 - Fthetat)
+//         );
 
-        // Transition onset momentum-thickness Reynolds number equation
-        tmp<fvScalarMatrix> ReThetatEqn
-        (
-            fvm::ddt(alpha, rho, ReThetat_)
-          + fvm::div(alphaRhoPhi, ReThetat_)
-          - fvm::laplacian(alpha*rho*DReThetatEff(), ReThetat_)
-         ==
-            Pthetat*ReThetat0(Us, dUsds, nu) - fvm::Sp(Pthetat, ReThetat_)
-          + fvOptions(alpha, rho, ReThetat_)
-        );
+//         // Transition onset momentum-thickness Reynolds number equation
+//         tmp<fvScalarMatrix> ReThetatEqn
+//         (
+//             fvm::ddt(alpha, rho, ReThetat_)
+//           + fvm::div(alphaRhoPhi, ReThetat_)
+//           - fvm::laplacian(alpha*rho*DReThetatEff(), ReThetat_)
+//          ==
+//             Pthetat*ReThetat0(Us, dUsds, nu) - fvm::Sp(Pthetat, ReThetat_)
+//           + fvOptions(alpha, rho, ReThetat_)
+//         );
 
-        ReThetatEqn.ref().relax();
-        fvOptions.constrain(ReThetatEqn.ref());
-        solve(ReThetatEqn);
-        fvOptions.correct(ReThetat_);
-        bound(ReThetat_, 0);
-    }
+//         ReThetatEqn.ref().relax();
+//         fvOptions.constrain(ReThetatEqn.ref());
+//         solve(ReThetatEqn);
+//         fvOptions.correct(ReThetat_);
+//         bound(ReThetat_, 0);
+//     }
 
-    const volScalarField::Internal ReThetac(this->ReThetac());
-    const volScalarField::Internal Rev(sqr(y)*S/nu);
-    const volScalarField::Internal RT(k()/(nu*omega()));
+//     const volScalarField::Internal ReThetac(this->ReThetac());
+//     const volScalarField::Internal Rev(sqr(y)*S/nu);
+//     const volScalarField::Internal RT(k()/(nu*omega()));
 
-    {
-        const volScalarField::Internal Pgamma
-        (
-            alpha()*rho()
-           *ca1_*Flength(nu)*S*sqrt(gammaInt_()*Fonset(Rev, ReThetac, RT))
-        );
+//     {
+//         const volScalarField::Internal Pgamma
+//         (
+//             alpha()*rho()
+//            *ca1_*Flength(nu)*S*sqrt(gammaInt_()*Fonset(Rev, ReThetac, RT))
+//         );
 
-        const volScalarField::Internal Fturb(exp(-pow4(0.25*RT)));
+//         const volScalarField::Internal Fturb(exp(-pow4(0.25*RT)));
 
-        const volScalarField::Internal Egamma
-        (
-            alpha()*rho()*ca2_*Omega*Fturb*gammaInt_()
-        );
+//         const volScalarField::Internal Egamma
+//         (
+//             alpha()*rho()*ca2_*Omega*Fturb*gammaInt_()
+//         );
 
-        // Intermittency equation
-        tmp<fvScalarMatrix> gammaIntEqn
-        (
-            fvm::ddt(alpha, rho, gammaInt_)
-          + fvm::div(alphaRhoPhi, gammaInt_)
-          - fvm::laplacian(alpha*rho*DgammaIntEff(), gammaInt_)
-        ==
-            Pgamma - fvm::Sp(ce1_*Pgamma, gammaInt_)
-          + Egamma - fvm::Sp(ce2_*Egamma, gammaInt_)
-          + fvOptions(alpha, rho, gammaInt_)
-        );
+//         // Intermittency equation
+//         tmp<fvScalarMatrix> gammaIntEqn
+//         (
+//             fvm::ddt(alpha, rho, gammaInt_)
+//           + fvm::div(alphaRhoPhi, gammaInt_)
+//           - fvm::laplacian(alpha*rho*DgammaIntEff(), gammaInt_)
+//         ==
+//             Pgamma - fvm::Sp(ce1_*Pgamma, gammaInt_)
+//           + Egamma - fvm::Sp(ce2_*Egamma, gammaInt_)
+//           + fvOptions(alpha, rho, gammaInt_)
+//         );
 
-        gammaIntEqn.ref().relax();
-        fvOptions.constrain(gammaIntEqn.ref());
-        solve(gammaIntEqn);
-        fvOptions.correct(gammaInt_);
-        bound(gammaInt_, 0);
-    }
+//         gammaIntEqn.ref().relax();
+//         fvOptions.constrain(gammaIntEqn.ref());
+//         solve(gammaIntEqn);
+//         fvOptions.correct(gammaInt_);
+//         bound(gammaInt_, 0);
+//     }
 
-    const volScalarField::Internal Freattach(exp(-pow4(RT/20.0)));
-    const volScalarField::Internal gammaSep
-    (
-        min(2*max(Rev/(3.235*ReThetac) - 1, scalar(0))*Freattach, scalar(2))
-       *Fthetat
-    );
+//     const volScalarField::Internal Freattach(exp(-pow4(RT/20.0)));
+//     const volScalarField::Internal gammaSep
+//     (
+//         min(2*max(Rev/(3.235*ReThetac) - 1, scalar(0))*Freattach, scalar(2))
+//        *Fthetat
+//     );
 
-    gammaIntEff_ = max(gammaInt_(), gammaSep);
-}
+//     gammaIntEff_ = max(gammaInt_(), gammaSep);
+// }
 
 
-template<class BasicTurbulenceModel>
-void kOmegaSSTCC<BasicTurbulenceModel>::correct()
+template<class BasicEddyViscosityModel>
+void kOmegaSSTCC<BasicEddyViscosityModel>::correct()
 {
     if (!this->turbulence_)
     {
         return;
     }
 
-    // Correct k and omega
-    kOmegaSST<BasicTurbulenceModel>::correct();
+    // Local references
+    const alphaField& alpha = this->alpha_;
+    const rhoField& rho = this->rho_;
+    const surfaceScalarField& alphaRhoPhi = this->alphaRhoPhi_;
+    const volVectorField& U = this->U_;
+    volScalarField& nut = this->nut_;
+    fv::options& fvOptions(fv::options::New(this->mesh_));
 
-    // Correct Production Term
-    correctProductionTerm();
+    BasicEddyViscosityModel::correct();
+
+    const volScalarField::Internal divU
+    (
+        fvc::div(fvc::absolute(this->phi(), U))
+    );
+
+    // tmp<volTensorField> tgradU = fvc::grad(U);
+    // const volScalarField S2(this->S2(tgradU()));
+
+    tmp<volTensorField> tgradU = fvc::grad(U);
+    tmp<volSymmTensorField> symmGradU = symm(tgradU());
+    tmp<volVectorField> rotRateMesh(this->rotRateMesh());
+    tmp<volTensorField> hodgeDualrotRateMesh(*rotRateMesh);
+    tmp<volTensorField> Omega(skew(tgradU()) + hodgeDualrotRateMesh);
+    
+    const volScalarField& Omega2(2*magSqr(Omega));
+    const volScalarField& S2(2*magSqr(symmGradU));
+    const volScalarField& sqrtS2(sqrt(S2));
+    const volScalarField& sqrtOmega2(sqrt(Omega2));
+    const volScalarField::Internal& onebyOmegaD3(this->onebyOmegaD3(S2, sqrtOmega2));
+    const volScalarField& rStarByOnePlusrStar(sqrtS2/(sqrtS2+sqrtOmega2));
+    const volScalarField::Internal& rTilda(this->rTilda(symmGradU,Omega,hodgeDualrotRateMesh,onebyOmegaD3));
+    // const volScalarField& fRotation(this->fRotation(rStarByOnePlusrStar,rTilda));
+    // const volScalarField& fr1(max(min(fRotation, 1.25), 0.0));
+
+
+    volScalarField::Internal GbyNu0(this->GbyNu0(tgradU(), S2));
+    volScalarField::Internal G(this->GName(), nut*GbyNu0);
+
+    // - boundary condition changes a cell value
+    // - normally this would be triggered through correctBoundaryConditions
+    // - which would do
+    //      - fvPatchField::evaluate() which calls
+    //      - fvPatchField::updateCoeffs()
+    // - however any processor boundary conditions already start sending
+    //   at initEvaluate so would send over the old value.
+    // - avoid this by explicitly calling updateCoeffs early and then
+    //   only doing the boundary conditions that rely on initEvaluate
+    //   (currently only coupled ones)
+
+    //- 1. Explicitly swap values on coupled boundary conditions
+    // Update omega and G at the wall
+    this->omega_.boundaryFieldRef().updateCoeffs();
+    // omegaWallFunctions change the cell value! Make sure to push these to
+    // coupled neighbours. Note that we want to avoid the re-updateCoeffs
+    // of the wallFunctions so make sure to bypass the evaluate on
+    // those patches and only do the coupled ones.
+    this->omega_.boundaryFieldRef().template evaluateCoupled<coupledFvPatch>();
+
+    ////- 2. Make sure the boundary condition calls updateCoeffs from
+    ////     initEvaluate
+    ////     (so before any swap is done - requires all coupled bcs to be
+    ////      after wall bcs. Unfortunately this conflicts with cyclicACMI)
+    //omega_.correctBoundaryConditions();
+
+
+    const volScalarField CDkOmega
+    (
+        (2*this->alphaOmega2_)*(fvc::grad(this->k_) & fvc::grad(this->omega_))/this->omega_
+    );
+
+    const volScalarField F1(this->F1(CDkOmega));
+    const volScalarField F23(this->F23());
+
+    {
+        const volScalarField::Internal gamma(this->gamma(F1));
+        const volScalarField::Internal beta(this->beta(F1));
+
+        GbyNu0 = this->GbyNu(GbyNu0, F23(), S2());
+
+        // Turbulent frequency equation
+        tmp<fvScalarMatrix> omegaEqn
+        (
+            fvm::ddt(alpha, rho, this->omega_)
+          + fvm::div(alphaRhoPhi, this->omega_)
+          - fvm::laplacian(alpha*rho*this->DomegaEff(F1), this->omega_)
+         ==
+            alpha()*rho()*gamma*GbyNu0
+          - fvm::SuSp((2.0/3.0)*alpha()*rho()*gamma*divU, this->omega_)
+          - fvm::Sp(alpha()*rho()*beta*this->omega_(), this->omega_)
+          - fvm::SuSp
+            (
+                alpha()*rho()*(F1() - scalar(1))*CDkOmega()/this->omega_(),
+                this->omega_
+            )
+          + alpha()*rho()*beta*sqr(this->omegaInf_)
+          + this->Qsas(S2(), gamma, beta)
+          + this->omegaSource()
+          + fvOptions(alpha, rho, this->omega_)
+        );
+
+        omegaEqn.ref().relax();
+        fvOptions.constrain(omegaEqn.ref());
+        omegaEqn.ref().boundaryManipulate(this->omega_.boundaryFieldRef());
+        solve(omegaEqn);
+        fvOptions.correct(this->omega_);
+        bound(this->omega_, this->omegaMin_);
+    }
+
+    {
+        // Turbulent kinetic energy equation
+        tmp<fvScalarMatrix> kEqn
+        (
+            fvm::ddt(alpha, rho, this->k_)
+          + fvm::div(alphaRhoPhi, this->k_)
+          - fvm::laplacian(alpha*rho*this->DkEff(F1), this->k_)
+         ==
+            alpha()*rho()*this->Pk(G)
+          - fvm::SuSp((2.0/3.0)*alpha()*rho()*divU, this->k_)
+          - fvm::Sp(alpha()*rho()*this->epsilonByk(F1, tgradU()), this->k_)
+          + alpha()*rho()*this->betaStar_*this->omegaInf_*this->kInf_
+          + this->kSource()
+          + fvOptions(alpha, rho, this->k_)
+        );
+
+        tgradU.clear();
+
+        kEqn.ref().relax();
+        fvOptions.constrain(kEqn.ref());
+        solve(kEqn);
+        fvOptions.correct(this->k_);
+        bound(this->k_, this->kMin_);
+    }
+
+
+    this->correctNut(S2);
 }
+
 
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

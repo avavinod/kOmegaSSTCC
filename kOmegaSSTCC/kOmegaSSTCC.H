@@ -82,7 +82,7 @@ Description
 
     The default model coefficients are
     \verbatim
-        kOmegaSSTCCCoeffs
+        kOmegaSSTCoeffs
         {
             alphaK1     0.85;
             alphaK2     1.0;
@@ -97,6 +97,11 @@ Description
             b1          1.0;
             c1          10.0;
             F3          no;
+
+            // Default CC coefficients
+            cr1         1;
+            cr2         2;
+            cr3         1;
         }
     \endverbatim
 
@@ -112,9 +117,7 @@ SeeAlso
 #define kOmegaSSTCC_H
 
 #include "kOmegaSST.H"
-#include "RASModel.H"
-#include "eddyViscosity.H"
-
+#include "IOMRFZoneList.H"
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
@@ -129,7 +132,7 @@ namespace RASModels
 template<class BasicTurbulenceModel>
 class kOmegaSSTCC
 :
-    public kOmegaSST<eddyViscosity<RASModel<BasicTurbulenceModel>>>
+    public kOmegaSST<BasicTurbulenceModel>
 {
     // Private Member Functions
 
@@ -142,11 +145,111 @@ class kOmegaSSTCC
 
 protected:
 
+// Protected data
+
+    // Model constants
+
+        dimensionedScalar cr1_;
+        dimensionedScalar cr2_;
+        dimensionedScalar cr3_;  
+
+        //- MRF zones
+        // IOMRFZoneList MRF_;
+    // Fields
+
+        // - Curvature Correction multiplier for production term
+        // volScalarField prodMutliplier_;
+
+
     // Protected Member Functions
 
-        virtual void correctNut(const volScalarField& S2);
-        virtual
-        virtual void correctNut();
+        // //- Return symmetric matrice of strain rate
+        // virtual tmp<volTensorField> symmGradU
+        // (
+        //     const volTensorField& gradU
+        // ) const;
+ 
+        //- Return rotation rate of mesh
+        virtual tmp<volVectorField> rotRateMesh() const;
+
+    //     //- Return hodge dual matrice of rotation rate vector of mesh
+    //     virtual tmp<volTensorField> hodgeDualrotRateMesh
+    //     (
+    //         const volVectorField& rotRate
+    //     ) const;
+
+    //    //- Return asymetric matrice of strain rate modified for mesh rotation
+    //     virtual tmp<volTensorField> Omega
+    //     (
+    //         const volTensorField& gradU,
+    //         const volTensorField& hodgeDualrotRateMesh
+    //     ) const;
+
+        // //- Return scalar square of symmGradU
+        // virtual tmp<volScalarField> S2
+        // (
+        //     const volTensorField& symmGradU
+        // ) const:
+
+        // //- Return scalar square of Omega
+        // virtual tmp<volScalarField> Omega2
+        // (
+        //     const volTensorField& Omega
+        // ) const;
+
+        // //- Return square root of scalar square of symmGradU
+        // tmp<volScalarField> sqrtS2
+        // (
+        //     const volScalarField& S2
+        // ) const;
+
+        // //- Return square root of scalar square of Omega
+        // tmp<volScalarField> sqrtOmega2
+        // (
+        //     const volTensorField& Omega2
+        // ) const;
+
+        // - Return square of strain rate
+        virtual tmp<volScalarField::Internal> onebyOmegaD3
+        (
+            const volScalarField& S2,
+            const volScalarField& sqrtOmega2
+        ) const;
+
+        // //- Return square of strain rate
+        // virtual tmp<volScalarField> rStarByOnePlusrStar
+        // (
+        //     const volScalarField& sqrtS2,
+        //     const volScalarField& sqrtOmega2
+        // ) const;
+
+        // - Return square of strain rate
+        virtual tmp<volScalarField::Internal> rTilda
+        (
+            const volTensorField& symmGradU,
+            const volTensorField& Omega,
+            const volTensorField& hodgeDualrotRateMesh,
+            const volScalarField::Internal& onebyOmegaD3
+        ) const;
+
+        // // - Return square of strain rate
+        // virtual tmp<volScalarField> fRotation
+        // (
+        //     const volScalarField& rStarByOnePlusrStar,
+        //     const volScalarField& rTilda
+        // ) const;
+
+        // //- Return square of strain rate
+        // virtual tmp<volScalarField> fr1
+        // (
+        //     const volScalarField& fRotation
+        // ) const;
+
+        // //- Modified form of the k-omega SST k production rate
+        // virtual tmp<volScalarField::Internal> Pk
+        // (
+        //     const volScalarField::Internal& G
+        // ) const;
 
 
 public:
@@ -178,6 +281,66 @@ public:
 
     //- Destructor
     virtual ~kOmegaSSTCC() = default;
+
+    // Member Functions
+
+        //- Re-read model coefficients if they have changed
+        virtual bool read();
+        
+        // Dont have  any function like this
+        // //- Access function transition onset momentum-thickness Reynolds number
+        // const volScalarField& ReThetat() const
+        // {
+        //     return ReThetat_;
+        // }
+
+        // //- Access function to intermittency
+        // const volScalarField& gammaInt() const
+        // {
+        //     return gammaInt_;
+        // }
+
+        //- Return the effective diffusivity for transition onset
+        // //  momentum-thickness Reynolds number
+        // tmp<volScalarField> DReThetatEff() const
+        // {
+        //     return tmp<volScalarField>
+        //     (
+        //         new volScalarField
+        //         (
+        //             "DReThetatEff",
+        //             sigmaThetat_*(this->nut_ + this->nu())
+        //         )
+        //     );
+        // }
+
+        // //- Return the effective diffusivity for intermittency
+        // tmp<volScalarField> DgammaIntEff() const
+        // {
+        //     return tmp<volScalarField>
+        //     (
+        //         new volScalarField
+        //         (
+        //             "DgammaIntEff",
+        //             this->nut_ + this->nu()
+        //         )
+        //     );
+        // }
+
+        //- Solve the turbulence equations and correct the turbulence viscosity
+        virtual void correct();
+        // {
+        //     if (!this->turbulence_)
+        //     {
+        //         return;
+        //     }
+
+        //     // Correct k and omega
+        //     kOmegaSST<BasicTurbulenceModel>::correct();
+
+        //     // Correct ReThetat and gammaInt
+        //     correctReThetatGammaInt();
+        // }   
 };
 
 
