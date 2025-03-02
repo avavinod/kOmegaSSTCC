@@ -54,24 +54,36 @@ tmp<volVectorField> kOmegaSSTCC<BasicTurbulenceModel>::rotRateMesh() const
         this->mesh_,
         dimensionedVector( "dummy", dimensionSet(0,0,-1,0,0,0,0), vector::zero)
     );
-    IOMRFZoneList MRF_(this->mesh_);
+    // const auto* MRFZones =
+    // this->mesh_.cfindObject<IOMRFZoneList>("MRFProperties");
 
-    for (label j = 0; j < MRF_.UPtrList<MRFZone>::size(); ++j)
-    {
-        const MRFZone& mrf = MRF_.UPtrList<MRFZone>::operator[](j);
-        const label& cellZoneID_ = this->mesh_.cellZones().findZoneID(mrf.name());
-        if (cellZoneID_ == -1)
-        {
-            continue;
-        }
-        const labelList& cells = this->mesh_.cellZones()[cellZoneID_];
-        const vector Omega = mrf.Omega();
-        forAll(cells, i)
-        {
-            label celli = cells[i];
-            rotRate[celli] += Omega ;
-        }
-    }
+    // if (!MRFZones)
+    // {
+    //     return rotRate;
+    // }
+    // const IOMRFZoneList& MRF_(this->mesh_);
+
+    // if (!MRF_.active())
+    // {
+    //     return rotRate;
+    // }
+
+    // for (label j = 0; j < MRF_.UPtrList<MRFZone>::size(); ++j)
+    // {
+    //     const MRFZone& mrf = MRF_.UPtrList<MRFZone>::operator[](j);
+    //     const label& cellZoneID_ = this->mesh_.cellZones().findZoneID(mrf.name());
+    //     if (cellZoneID_ == -1)
+    //     {
+    //         continue;
+    //     }
+    //     const labelList& cells = this->mesh_.cellZones()[cellZoneID_];
+    //     const vector Omega = mrf.Omega();
+    //     forAll(cells, i)
+    //     {
+    //         label celli = cells[i];
+    //         rotRate[celli] += Omega ;
+    //     }
+    // }
     return rotRate;
 }
 
@@ -278,7 +290,7 @@ void kOmegaSSTCC<BasicEddyViscosityModel>::correct()
     );
 
     // tmp<volTensorField> tgradU = fvc::grad(U);
-    // const volScalarField S2(this->S2(tgradU()));
+    // const volScalarField  (this->S2(tgradU()));
 
     tmp<volTensorField> tgradU = fvc::grad(U);
     tmp<volSymmTensorField> symmGradU = symm(tgradU());
