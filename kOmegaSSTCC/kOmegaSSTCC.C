@@ -202,48 +202,6 @@ kOmegaSSTCC<BasicTurbulenceModel>::kOmegaSSTCC
 }
     // deltaU_("deltaU", dimVelocity, SMALL),
 
-    // ReThetat_
-    // (
-    //     IOobject
-    //     (
-    //         IOobject::groupName("ReThetat", alphaRhoPhi.group()),
-    //         this->runTime_.timeName(),
-    //         this->mesh_,
-    //         IOobject::MUST_READ,
-    //         IOobject::AUTO_WRITE,
-    //         IOobject::REGISTER
-    //     ),
-    //     this->mesh_
-    // ),
-
-    // gammaInt_
-    // (
-    //     IOobject
-    //     (
-    //         IOobject::groupName("gammaInt", alphaRhoPhi.group()),
-    //         this->runTime_.timeName(),
-    //         this->mesh_,
-    //         IOobject::MUST_READ,
-    //         IOobject::AUTO_WRITE,
-    //         IOobject::REGISTER
-    //     ),
-    //     this->mesh_
-    // ),
-
-    // gammaIntEff_
-    // (
-    //     IOobject
-    //     (
-    //         IOobject::groupName("gammaIntEff", alphaRhoPhi.group()),
-    //         this->runTime_.timeName(),
-    //         this->mesh_
-    //     ),
-    //     this->mesh_,
-    //     dimensionedScalar(dimless, Zero)
-    // )
-
-
-
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 template<class BasicTurbulenceModel>
@@ -254,11 +212,6 @@ bool kOmegaSSTCC<BasicTurbulenceModel>::read()
         cr1_.readIfPresent(this->coeffDict());
         cr2_.readIfPresent(this->coeffDict());
         cr3_.readIfPresent(this->coeffDict());
-        // ce2_.readIfPresent(this->coeffDict());
-        // sigmaThetat_.readIfPresent(this->coeffDict());
-        // cThetat_.readIfPresent(this->coeffDict());
-        // this->coeffDict().readIfPresent("lambdaErr", lambdaErr_);
-        // this->coeffDict().readIfPresent("maxLambdaIter", maxLambdaIter_);
 
         return true;
     }
@@ -298,15 +251,15 @@ void kOmegaSSTCC<BasicEddyViscosityModel>::correct()
     tmp<volTensorField> hodgeDualrotRateMesh(*rotRateMesh);
     tmp<volTensorField> Omega(skew(tgradU()) + hodgeDualrotRateMesh);
     
-    const volScalarField& Omega2(2*magSqr(Omega));
-    const volScalarField& S2(2*magSqr(symmGradU));
-    const volScalarField& sqrtS2(sqrt(S2));
-    const volScalarField& sqrtOmega2(sqrt(Omega2));
-    const volScalarField::Internal& onebyOmegaD3(this->onebyOmegaD3(S2, sqrtOmega2));
-    const volScalarField& rStarByOnePlusrStar(sqrtS2/(sqrtS2+sqrtOmega2));
-    const volScalarField::Internal& rTilda(this->rTilda(symmGradU,Omega,hodgeDualrotRateMesh,onebyOmegaD3));
-    const volScalarField::Internal& fRotation(this->fRotation(rStarByOnePlusrStar,rTilda));
-    const volScalarField::Internal& fr1(max(min(fRotation, 1.25), 0.0));
+    const volScalarField Omega2(2*magSqr(Omega));
+    const volScalarField S2(2*magSqr(symmGradU));
+    const volScalarField sqrtS2(sqrt(S2));
+    const volScalarField sqrtOmega2(sqrt(Omega2));
+    const volScalarField::Internal onebyOmegaD3(this->onebyOmegaD3(S2, sqrtOmega2));
+    const volScalarField rStarByOnePlusrStar(sqrtS2/(sqrtS2+sqrtOmega2));
+    const volScalarField::Internal rTilda(this->rTilda(symmGradU,Omega,hodgeDualrotRateMesh,onebyOmegaD3));
+    const volScalarField::Internal fRotation(this->fRotation(rStarByOnePlusrStar,rTilda));
+    const volScalarField::Internal fr1(max(min(fRotation, 1.25), 0.0));
 
 
     volScalarField::Internal GbyNu0(this->GbyNu0(tgradU(), S2));
