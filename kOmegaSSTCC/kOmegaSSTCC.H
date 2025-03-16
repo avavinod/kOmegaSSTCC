@@ -157,10 +157,10 @@ protected:
         virtual tmp<volVectorField> rotRateMesh() const;
 
         // - Return square of strain rate
-        virtual tmp<volScalarField::Internal> onebyOmegaD3
+        virtual tmp<volScalarField::Internal> OmegaD3
         (
             const volScalarField& S2,
-            const volScalarField::Internal& sqrtOmega2
+            const volScalarField& sqrtOmega2
         ) const;
 
         // - Return square of strain rate
@@ -169,7 +169,7 @@ protected:
             const volSymmTensorField& symmGradU,
             const volTensorField& Omega,
             const volTensorField& hodgeDualrotRateMesh,
-            const volScalarField::Internal& onebyOmegaD3
+            const volScalarField::Internal& OmegaD3
         ) const;
 
         // - Return square of strain rate

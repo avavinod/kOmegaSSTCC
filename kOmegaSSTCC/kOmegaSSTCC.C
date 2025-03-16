@@ -41,19 +41,55 @@ namespace RASModels
 template<class BasicTurbulenceModel>
 tmp<volVectorField> kOmegaSSTCC<BasicTurbulenceModel>::rotRateMesh() const
 {
-    volVectorField rotRate
+    // auto tRotRate = volVectorField::New
+    // (
+    //     IOobject::groupName("rotRate", this->alphaRhoPhi_.group()),
+    //     IOobject::NO_READ,
+    //     IOobject::NO_WRITE,
+    //     this->mesh_,
+    //     dimensionedVector( "rotRate", dimensionSet(0,0,-1,0,0,0,0), vector::zero)
+    // );
+    // // auto& rotRate = trotRate.ref();
+    tmp<volVectorField> trotRate
     (
-        IOobject
+        tmp<volVectorField>::New
         (
-            "rotRate",
-            this->runTime_.timeName(),
+            IOobject
+            (
+                "rotRate",
+                this->mesh_.time().timeName(),
+                this->mesh_,
+                IOobject::NO_READ,
+                IOobject::NO_WRITE
+            ),
             this->mesh_,
-            IOobject::NO_READ,
-            IOobject::NO_WRITE
-        ),
-        this->mesh_,
-        dimensionedVector( "dummy", dimensionSet(0,0,-1,0,0,0,0), vector::zero)
+            dimensionedVector(dimensionSet(0, 0, -1, 0, 0), Zero)
+        )
     );
+    volVectorField& rotRate = trotRate.ref();
+
+
+    // volVectorField rotRate
+    // (
+    //     IOobject
+    //     (
+    //         "rotRate",
+    //         this->runTime_.timeName(),
+    //         this->mesh_,
+    //         IOobject::NO_READ,
+    //         IOobject::NO_WRITE
+    //     ),
+    //     this->mesh_,
+    //     dimensionedVector( "dummy", dimensionSet(0,0,-1,0,0,0,0), vector::zero)
+    // );
+
+    // volVectorField rotRate
+    // (
+    //     IOobject::groupName("rotRate", this->alphaRhoPhi_.group()),
+    //     IOobject::NO_REGISTER,
+    //     this->mesh_,
+    //     dimensionedVector( "dummy", dimensionSet(0,0,-1,0,0,0,0), vector::zero)
+    // );
     // const auto* MRFZones =
     // this->mesh_.cfindObject<IOMRFZoneList>("MRFProperties");
 
@@ -84,19 +120,19 @@ tmp<volVectorField> kOmegaSSTCC<BasicTurbulenceModel>::rotRateMesh() const
     //         rotRate[celli] += Omega ;
     //     }
     // }
-    return rotRate;
+    return trotRate;
 }
 
 template<class BasicTurbulenceModel>
-tmp<volScalarField::Internal> kOmegaSSTCC<BasicTurbulenceModel>::onebyOmegaD3
+tmp<volScalarField::Internal> kOmegaSSTCC<BasicTurbulenceModel>::OmegaD3
 (
     const volScalarField& S2,
-    const volScalarField::Internal& sqrtOmega2
+    const volScalarField& sqrtOmega2
 ) const
 {
     const volScalarField::Internal& omega_ = this->omega_();
-    tmp<volScalarField::Internal>  D2(max(S2, 0.09*2.0*omega_*omega_));
-    return scalar(1.0)/(sqrtOmega2 * D2 * sqrt(D2));
+    const volScalarField::Internal  D2 = max(S2, 0.09*omega_*omega_);
+    return  (sqrtOmega2 * D2 * sqrt(D2));
 }
 
 template<class BasicTurbulenceModel>
@@ -105,24 +141,14 @@ tmp<volScalarField::Internal> kOmegaSSTCC<BasicTurbulenceModel>::rTilda
     const volSymmTensorField& symmGradU,
     const volTensorField& Omega,
     const volTensorField& hodgeDualrotRateMesh,
-    const volScalarField::Internal& onebyOmegaD3
+    const volScalarField::Internal& OmegaD3
 ) const
 {
-    tmp<volTensorField> twoOmegaS = 2.0 * (Omega & symmGradU);
-    tmp<volSymmTensorField> DDtS
-    (
-        fvc::DDt(this->phi(), symmGradU)
-    );
-    tmp<volTensorField> leviCivitaSRotRate
-    (
-        hodgeDualrotRateMesh & symmGradU
-    );
-    tmp<volScalarField::Internal> resultingScalarInternal
-    (
-        twoOmegaS && (DDtS + (leviCivitaSRotRate & T(leviCivitaSRotRate)))
-    );
-
-    return  resultingScalarInternal * onebyOmegaD3;
+    const volTensorField::Internal twoOmegaS ( 2.0 * (Omega & symmGradU));
+    const volSymmTensorField::Internal DDtS = fvc::DDt(this->phi(), symmGradU);
+    const volTensorField::Internal leviCivitaSRotRate (1.0 * (hodgeDualrotRateMesh & symmGradU));
+    const volSymmTensorField::Internal x (DDtS + 2.0*symm(leviCivitaSRotRate));
+    return (twoOmegaS && x) * 1.0 / (OmegaD3 + dimensionedScalar("ROOTVSMALL",dimensionSet(0, 0, -4, 0, 0),ROOTVSMALL));
 }
 
 // - Return square of strain rate
@@ -165,6 +191,7 @@ kOmegaSSTCC<BasicTurbulenceModel>::kOmegaSSTCC
         transport,
         propertiesName,
         typeName
+    // )
     ),
 
     cr1_
@@ -243,24 +270,37 @@ void kOmegaSSTCC<BasicEddyViscosityModel>::correct()
     );
 
     // tmp<volTensorField> tgradU = fvc::grad(U);
-    // const volScalarField  (this->S2(tgradU()));
+    // const volScalarField  S2 (this->S2(tgradU()));
 
     tmp<volTensorField> tgradU = fvc::grad(U);
-    tmp<volSymmTensorField> symmGradU = symm(tgradU());
-    tmp<volVectorField> rotRateMesh(this->rotRateMesh());
-    tmp<volTensorField> hodgeDualrotRateMesh(*rotRateMesh);
-    tmp<volTensorField> Omega(skew(tgradU()) + hodgeDualrotRateMesh);
+    const volSymmTensorField symmGradU = symm(tgradU());
+    // const volTensorField hodgeDualrotRateMesh = *(this->rotRateMesh());
+    volTensorField hodgeDualrotRateMesh
+    (
+    IOobject
+    (
+    "hodgeDualrotRateMesh",
+    this->runTime_.timeName(),
+    this->mesh_,
+    IOobject::NO_READ,
+    IOobject::AUTO_WRITE
+    ),
+    this->mesh_,
+    dimensionedTensor("name", dimensionSet(0,0,-1,0,0,0,0), //correct dimensions here
+    tensor::zero)
+    );
     
-    const volScalarField Omega2(2*magSqr(Omega));
+    const volTensorField Omega(skew(tgradU()) + hodgeDualrotRateMesh);
+    tmp<volScalarField> Omega2(2*magSqr(Omega));
+    const volScalarField sqrtOmega2(sqrt(Omega2));
+
     const volScalarField S2(2*magSqr(symmGradU));
     const volScalarField sqrtS2(sqrt(S2));
-    const volScalarField sqrtOmega2(sqrt(Omega2));
-    const volScalarField::Internal onebyOmegaD3(this->onebyOmegaD3(S2, sqrtOmega2));
-    const volScalarField rStarByOnePlusrStar(sqrtS2/(sqrtS2+sqrtOmega2));
-    const volScalarField::Internal rTilda(this->rTilda(symmGradU,Omega,hodgeDualrotRateMesh,onebyOmegaD3));
-    const volScalarField::Internal fRotation(this->fRotation(rStarByOnePlusrStar,rTilda));
-    const volScalarField::Internal fr1(max(min(fRotation, 1.25), 0.0));
-
+    
+    const volScalarField::Internal OmegaD3(this->OmegaD3(S2, sqrtOmega2));
+    const volScalarField rStarByOnePlusrStar(sqrtS2/(sqrtS2+sqrtOmega2+dimensionedScalar("ROOTVSMALL",dimensionSet(0, 0, -1, 0, 0),ROOTVSMALL)));
+    const volScalarField::Internal rTilda(this->rTilda(symmGradU,Omega,hodgeDualrotRateMesh,OmegaD3));
+    const volScalarField::Internal fr1 (max(min(this->fRotation(rStarByOnePlusrStar,rTilda), 1.25), 0.0));
 
     volScalarField::Internal GbyNu0(this->GbyNu0(tgradU(), S2));
     volScalarField::Internal G(this->GName(), nut*GbyNu0);

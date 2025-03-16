@@ -1,7 +1,7 @@
 # kOmegaSSTCC
 This is an attempt to add curvature correction (CC) to the k-Omega SST turbulence model based on the paper by Smirnov and Mentner "Sensitization of the SST Turbulence Model to Rotation and Curvature by Applying the Spalart-Shur Correction term".
 
-Motivation: It is well knownt that cyclone separator simulations employing the normal k-Omega SST and other such two equation models fail to predict the correct velocity distributions because of strong swirl and streamline curvature. The curvature correction term is a way of enabling the two-equation models to more accurately capture such flow behaviour without resorting to RSTM models.
+Motivation: It is well known that cyclone separator simulations employing the normal k-Omega SST and other such two-equation models fail to predict the correct velocity distributions because of strong swirl and streamline curvature. The curvature correction term is a way of enabling the two-equation models to more accurately capture such flow behaviour without resorting to RSTM models.
 
 How does it work: Uses empirical relations to modify the turbulent kinetic energy production term. 
 
